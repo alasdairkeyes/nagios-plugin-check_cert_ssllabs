@@ -174,7 +174,7 @@ sub report {
         $exit_value = WARNING;
     }
 
-    nagios_exit ( $exit_value, "Score $score");
+    nagios_exit ( $exit_value, "$hostname :: Score $score");
     
 }
 
