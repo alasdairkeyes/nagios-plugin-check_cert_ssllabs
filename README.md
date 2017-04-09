@@ -87,6 +87,7 @@ None planned
 
 ## Changelog
 
+* 2017-04-09 :: 0.2.0   :: Implementation of scan/report modes
 * 2017-04-08 :: 0.1.0   :: First draft
 
 ## Site

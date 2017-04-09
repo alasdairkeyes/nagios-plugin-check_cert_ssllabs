@@ -7,7 +7,7 @@ use Nagios::Plugin::Getopt;
 use Data::Validate::Domain qw/ is_hostname /;
 use DateTime;
 
-my $VERSION = '0.1.0';
+my $VERSION = '0.2.0';
 
     # Definitions
 my $modes = {
