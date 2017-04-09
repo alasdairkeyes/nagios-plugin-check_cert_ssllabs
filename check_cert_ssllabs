@@ -5,12 +5,33 @@ use warnings;
 use Nagios::Plugin::Functions;
 use Nagios::Plugin::Getopt;
 use Data::Validate::Domain qw/ is_hostname /;
+use DateTime;
 
 my $VERSION = '0.1.0';
 
+    # Definitions
+my $modes = {
+    scan    => 1,
+    report  => 1,
+};
+    # Define numeric values for scores
+my $scores = {
+    'A+'    => '1000',
+    'A'     => '900',
+    'A-'    => '800',
+    'B'     => '700',
+    'C'     => '600',
+    'D'     => '500',
+    'E'     => '400',
+    'F'     => '300',
+    'T'     => '200'
+};
+
+
+
     # Get arguments
 my $go = Nagios::Plugin::Getopt->new(
-    usage       => "Usage: %s -H <hostname> [ -w <warning> -c <critical> -s </path/tossllabs-scan> -C ]",
+    usage       => "Usage: %s -H <hostname> --mode=(scan|report) [ -w <warning> -c <critical> -s </path/to/ssllabs-scan> -r /path/to/report-file -C -a 24 ]",
     version     => $VERSION,
     url         => 'https://github.com/alasdairkeyes/nagios-plugin-check_cert_ssllabs',
     blurb       => "Check a website's SSL config against the SSLLabs API.",
@@ -50,74 +71,141 @@ $go->arg(
     required    => 0,
 );
 
+$go->arg(
+    spec        => 'mode|m=s',
+    help        => 'Mode that the script should run, options are ' . join(',', sort(keys(%$modes))),
+    required    => 1,
+);
+
+$go->arg(
+    spec        => 'reportfile|r=s',
+    help        => 'The file that the scan should output to',
+    required    => 0,
+    default     => '/tmp/check_cert_ssllabs_<hostname>.report'
+);
+
+$go->arg(
+    spec        => 'age|a=i',
+    help        => 'The amount of time in hours that the scan should be considered valid for.',
+    required    => 0,
+    default     => 24,
+);
+
 $go->getopts;
 
+my $mode        = $go->mode; 
 my $scantool    = $go->scantool;
 my $hostname    = $go->hostname;
 my $critical    = uc($go->critical);
 my $warning     = uc($go->warning);
+my $report_file = $go->reportfile;
+$report_file =~ s/<hostname>/$hostname/g;
+my $age         = $go->age;
 
-
-    # Define numeric values for scores
-my $scores = {
-    'A+'    => '1000',
-    'A'     => '900',
-    'A-'    => '800',
-    'B'     => '700',
-    'C'     => '600',
-    'D'     => '500',
-    'E'     => '400',
-    'F'     => '300',
-    'T'     => '200'
-};
-
+my $now = DateTime->now(
+    time_zone => 'local'
+);
 
 check_arguments();
 
-    # Run tool
-my $output;
-eval {
-    local $SIG{ALRM} = sub { die "alarm\n" };
-    alarm $go->timeout;
-    $output = `$scantool --quiet --grade $hostname`;
-    alarm 0;
-};
 
-nagios_exit ( CRITICAL, "Timeout" )
-    if ($@ && $@ eq "alarm\n");
-
-    # Get output
-my $score = parse_output($output);
-my $value = score_to_value($score);
-
-nagios_exit( CRITICAL, "Unknown score '$score'")
-    unless $value;
-
-my $exit_value = OK;
-if ($scores->{ uc($score) } <= $scores->{ $critical }) {
-    $exit_value = CRITICAL;
-} elsif ($scores->{ uc($score) } <= $scores->{ $warning }) {
-    $exit_value = WARNING;
+if ($mode eq 'scan') {
+    scan();
+} elsif ($mode eq 'report') {
+    report();
 }
 
-nagios_exit ( $exit_value, "Score $score");
+    # Both scan, report functions exit, this is just for readability
+exit;
+
+
+    # Scan mode
+sub scan {
+    my $output;
+    eval {
+        local $SIG{ALRM} = sub { die "alarm\n" };
+        alarm $go->timeout;
+        $output = `$scantool --quiet --grade $hostname`;
+        alarm 0;
+    };
+
+    my $score;
+
+    if ($@ && $@ eq "alarm\n") {
+        $score = 'Timeout';
+    } else {
+        $score = parse_output($output)
+            || 'Error';
+    }
+
+    open (my $fh, '>', $report_file)
+        || nagios_exit ( CRITICAL, "Failed to open '$report_file': $!" );
+
+
+    print $fh join(':', $now->epoch, $score);
+    close $fh;
+    exit 0;
+}
+
+    # Report mode
+sub report {
+    open (my $fh, '<', $report_file)
+        || nagios_exit ( CRITICAL, "Failed to open '$report_file': $!" );
+
+    my $line = <$fh>;
+    close $fh;
+    $line =~ s/\n//g;
+    my ($epoch, $score) = split(/:/, $line);
+
+    my $datetime = DateTime->from_epoch(
+        epoch   => $epoch,
+        time_zone   => 'local'
+    );
+
+    nagios_exit ( CRITICAL, 'Scan date of ' . $datetime->datetime . ' is too old')
+        if ($datetime->epoch + ($age * 60 * 60) < $now->epoch);
+
+    my $value = score_to_value($score);
+
+    my $exit_value = OK;
+    if ($value <= $scores->{ $critical }) {
+        $exit_value = CRITICAL;
+    } elsif ($value <= $scores->{ $warning }) {
+        $exit_value = WARNING;
+    }
+
+    nagios_exit ( $exit_value, "Score $score");
+    
+}
+
 
 
     # Check user supplied arguments
 sub check_arguments {
+
+    nagios_exit( CRITICAL, 'Invalid mode' )
+        unless ($modes->{ $mode });
+
     nagios_exit( CRITICAL, 'Invalid hostname')
         unless (is_hostname($hostname));
-    nagios_exit( CRITICAL, 'ssllabs-scan path is not executable')
-        unless (-x $scantool);
-    nagios_exit( CRITICAL, 'Invalid critical value')
-        unless ($scores->{ $critical });
-    nagios_exit( WARNING, 'Invalid warning value')
-        unless ($scores->{ $warning });
-    my $use_cache = '--usecache=true'
-        if ($go->usecache);
 
-    nagios_exit( CRITICAL, "Critical value must be lower than warning")
-        if ($scores->{ $critical } > $scores->{ $warning });
+
+    if ($mode eq 'scan') {
+
+        nagios_exit( CRITICAL, 'ssllabs-scan path is not executable')
+            unless (-x $scantool);
+        my $use_cache = '--usecache=true'
+            if ($go->usecache);
+
+    } elsif ($mode eq 'report') {
+
+        nagios_exit( CRITICAL, 'Invalid critical value')
+            unless ($scores->{ $critical });
+        nagios_exit( WARNING, 'Invalid warning value')
+            unless ($scores->{ $warning });
+        nagios_exit( CRITICAL, "Critical value must be lower than warning")
+            if ($scores->{ $critical } > $scores->{ $warning });
+    }
 }
 
 
