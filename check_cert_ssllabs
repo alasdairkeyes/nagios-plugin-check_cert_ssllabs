@@ -2,8 +2,8 @@
 
 use strict;
 use warnings;
-use Nagios::Plugin::Functions;
-use Nagios::Plugin::Getopt;
+use Monitoring::Plugin::Functions;
+use Monitoring::Plugin::Getopt;
 use Data::Validate::Domain qw/ is_hostname /;
 use DateTime;
 
@@ -30,7 +30,7 @@ my $scores = {
 
 
     # Get arguments
-my $go = Nagios::Plugin::Getopt->new(
+my $go = Monitoring::Plugin::Getopt->new(
     usage       => "Usage: %s -H <hostname> --mode=(scan|report) [ -w <warning> -c <critical> -s </path/to/ssllabs-scan> -r /path/to/report-file -C -a 24 ]",
     version     => $VERSION,
     url         => 'https://github.com/alasdairkeyes/nagios-plugin-check_cert_ssllabs',
