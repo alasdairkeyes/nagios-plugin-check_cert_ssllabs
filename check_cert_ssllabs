@@ -213,7 +213,7 @@ sub check_arguments {
 sub parse_output {
     my $output = shift;
     my ($first_line, @other) = split(/\n/, $output);
-    my @results = split(/:/, $first_line);
+    my @results = split(/:/, $first_line || ''));
     my $host    = $results[0] || '';
     my $score   = $results[1] || '';
     $score =~ s/[" ]+//g;
