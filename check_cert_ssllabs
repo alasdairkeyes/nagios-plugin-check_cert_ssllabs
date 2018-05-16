@@ -7,7 +7,7 @@ use Monitoring::Plugin::Getopt;
 use Data::Validate::Domain qw/ is_hostname /;
 use DateTime;
 
-my $VERSION = '0.3.0';
+my $VERSION = '0.3.1';
 
     # Definitions
 my $modes = {
