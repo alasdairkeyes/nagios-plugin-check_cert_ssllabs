@@ -81,7 +81,7 @@ $go->arg(
     spec        => 'reportfile|r=s',
     help        => 'The file that the scan should output to',
     required    => 0,
-    default     => '/tmp/check_cert_ssllabs_<hostname>.report'
+    default     => '/var/tmp/check_cert_ssllabs_<hostname>.report'
 );
 
 $go->arg(
