@@ -139,7 +139,7 @@ sub scan {
     }
 
     open (my $fh, '>', $report_file)
-        || nagios_exit ( CRITICAL, "Failed to open '$report_file': $!" );
+        || plugin_exit ( CRITICAL, "Failed to open '$report_file': $!" );
 
 
     print $fh join(':', $now->epoch, $score);
@@ -150,7 +150,7 @@ sub scan {
     # Report mode
 sub report {
     open (my $fh, '<', $report_file)
-        || nagios_exit ( CRITICAL, "Failed to open '$report_file': $!" );
+        || plugin_exit ( CRITICAL, "Failed to open '$report_file': $!" );
 
     my $line = <$fh>;
     close $fh;
@@ -162,7 +162,7 @@ sub report {
         time_zone   => 'local'
     );
 
-    nagios_exit ( CRITICAL, 'Scan date of ' . $datetime->datetime . ' is too old')
+    plugin_exit ( CRITICAL, 'Scan date of ' . $datetime->datetime . ' is too old')
         if ($datetime->epoch + ($age * 60 * 60) < $now->epoch);
 
     my $value = score_to_value($score);
@@ -174,7 +174,7 @@ sub report {
         $exit_value = WARNING;
     }
 
-    nagios_exit ( $exit_value, "$hostname :: Score $score");
+    plugin_exit ( $exit_value, "$hostname :: Score $score");
     
 }
 
@@ -183,27 +183,27 @@ sub report {
     # Check user supplied arguments
 sub check_arguments {
 
-    nagios_exit( CRITICAL, 'Invalid mode' )
+    plugin_exit( CRITICAL, 'Invalid mode' )
         unless ($modes->{ $mode });
 
-    nagios_exit( CRITICAL, 'Invalid hostname')
+    plugin_exit( CRITICAL, 'Invalid hostname')
         unless (is_hostname($hostname));
 
 
     if ($mode eq 'scan') {
 
-        nagios_exit( CRITICAL, 'ssllabs-scan path is not executable')
+        plugin_exit( CRITICAL, 'ssllabs-scan path is not executable')
             unless (-x $scantool);
         my $use_cache = '--usecache=true'
             if ($go->usecache);
 
     } elsif ($mode eq 'report') {
 
-        nagios_exit( CRITICAL, 'Invalid critical value')
+        plugin_exit( CRITICAL, 'Invalid critical value')
             unless ($scores->{ $critical });
-        nagios_exit( WARNING, 'Invalid warning value')
+        plugin_exit( WARNING, 'Invalid warning value')
             unless ($scores->{ $warning });
-        nagios_exit( CRITICAL, "Critical value must be lower than warning")
+        plugin_exit( CRITICAL, "Critical value must be lower than warning")
             if ($scores->{ $critical } > $scores->{ $warning });
     }
 }
